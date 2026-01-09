@@ -36,22 +36,15 @@ export default {
                 return new Response(JSON.stringify(usage_json, null, 2), { headers: { 'Content-Type': 'application/json;charset=UTF-8' } });
             } else if (访问路径 == 'admin' || 访问路径.startsWith('admin/') || 区分大小写访问路径 === 'config.json') {// 管理员面板
                 // 管理面板 - 验证Cookie
-                if (!验证管理员Cookie()) {
-                    return new Response(null, {
-                        status: 302,
-                        headers: { 'Location': '/' }
-                    });
+                if (验证管理员Cookie()) {
+                    if (区分大小写访问路径 === 'admin/config.json') {
+                        const usage_config_json = await env.KV.get('usage_config.json', { type: 'json' }) || [];
+                        return new Response(JSON.stringify(usage_config_json, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=UTF-8' } });
+                    }
+
+                    return UsagePanel管理面板(管理员TOKEN);
                 }
 
-                if (区分大小写访问路径 === 'admin/config.json') {
-                    const usage_config_json = await env.KV.get('usage_config.json', { type: 'json' }) || [];
-                    return new Response(JSON.stringify(usage_config_json, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=UTF-8' } });
-                }
-
-                return new Response('管理面板（开发中）', {
-                    status: 200,
-                    headers: { 'Content-Type': 'text/html; charset=UTF-8' }
-                });
             } else if (区分大小写访问路径.startsWith('api/') && request.method === 'POST') {// API接口
                 if (区分大小写访问路径 === 'api/login') { // 管理员登录接口
                     try {
@@ -91,15 +84,15 @@ export default {
                 if (区分大小写访问路径 === 'api/add') {// 增加CF账号
                     try {
                         const newConfig = await request.json();
-                        
+
                         // 验证配置完整性：需要 (Email + GlobalAPIKey) 或 (AccountID + APIToken)
                         const hasEmailAuth = newConfig.Email && newConfig.GlobalAPIKey;
                         const hasTokenAuth = newConfig.AccountID && newConfig.APIToken;
-                        
+
                         if (!hasEmailAuth && !hasTokenAuth) {
                             return new Response(JSON.stringify({ success: false, msg: '配置不完整，需要提供 Email+GlobalAPIKey 或 AccountID+APIToken' }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                         }
-                        
+
                         const CF_JSON = {
                             ID: 0,
                             Name: newConfig.Name || '未命名账号',
@@ -122,62 +115,62 @@ export default {
                         if (!usage_result.success) {
                             return new Response(JSON.stringify({ success: false, msg: '无法验证该CF账号的API信息' }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                         }
-                        
+
                         CF_JSON.Usage = usage_result;
                         CF_JSON.UpdateTime = Date.now();
-                        
+
                         // 读取现有配置
                         let usage_config_json = await env.KV.get('usage_config.json', { type: 'json' });
                         if (!Array.isArray(usage_config_json)) {
                             usage_config_json = [];
                         }
-                        
+
                         // 生成新 ID：现有最大 ID + 1，如果为空则从 1 开始
-                        CF_JSON.ID = usage_config_json.length > 0 
-                            ? Math.max(...usage_config_json.map(item => item.ID || 0)) + 1 
+                        CF_JSON.ID = usage_config_json.length > 0
+                            ? Math.max(...usage_config_json.map(item => item.ID || 0)) + 1
                             : 1;
-                        
+
                         // 添加到配置数组中并保存到 KV
                         usage_config_json.push(CF_JSON);
                         await env.KV.put('usage_config.json', JSON.stringify(usage_config_json));
-                        
+
                         return new Response(JSON.stringify({ success: true, msg: '账号添加成功', data: { ID: CF_JSON.ID, Name: CF_JSON.Name } }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                     } catch (error) {
                         console.error('保存配置失败:', error);
                         return new Response(JSON.stringify({ success: false, msg: '保存配置失败: ' + error.message }), { status: 500, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                     }
-                    
+
                 } else if (区分大小写访问路径 === 'api/del') {// 删除CF账号
                     try {
                         const body = await request.json();
                         const deleteId = body.ID;
-                        
+
                         // 验证 ID 参数
                         if (deleteId === undefined || deleteId === null) {
                             return new Response(JSON.stringify({ success: false, msg: '请提供要删除的账号ID' }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                         }
-                        
+
                         // 读取现有配置
                         let usage_config_json = await env.KV.get('usage_config.json', { type: 'json' });
                         if (!Array.isArray(usage_config_json) || usage_config_json.length === 0) {
                             return new Response(JSON.stringify({ success: false, msg: '配置列表为空，无法删除' }), { status: 404, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                         }
-                        
+
                         // 查找要删除的账号
                         const targetIndex = usage_config_json.findIndex(item => item.ID === deleteId);
                         if (targetIndex === -1) {
                             return new Response(JSON.stringify({ success: false, msg: `未找到ID为 ${deleteId} 的账号` }), { status: 404, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                         }
-                        
+
                         // 获取被删除账号的名称用于返回信息
                         const deletedName = usage_config_json[targetIndex].Name || '未命名账号';
-                        
+
                         // 删除该账号
                         usage_config_json.splice(targetIndex, 1);
-                        
+
                         // 保存回 KV
                         await env.KV.put('usage_config.json', JSON.stringify(usage_config_json));
-                        
+
                         return new Response(JSON.stringify({ success: true, msg: `账号 "${deletedName}" 已删除`, data: { ID: deleteId, Name: deletedName } }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                     } catch (error) {
                         console.error('删除账号失败:', error);
@@ -195,9 +188,11 @@ export default {
                 }
             } else if (访问路径 === 'robots.txt') {
                 return new Response('User-agent: *\nDisallow: /', { status: 200, headers: { 'Content-Type': 'text/plain; charset=UTF-8' } });
+            } else if (url.pathname === '/') {
+                return UsagePanel主页(临时TOKEN);
             }
 
-            return UsagePanel主页(临时TOKEN);
+            return new Response('404 Not Found', { status: 404 });
         } else {
             return new Response('请先绑定一个KV命名空间到变量KV', { status: 500 });
         }
@@ -345,6 +340,11 @@ async function getCloudflareUsage(Email, GlobalAPIKey, AccountID, APIToken) {
 }
 
 ////////////////////////////////HTML页面//////////////////////////////////
+
+async function UsagePanel管理面板(TOKEN) {
+    const html = ``;
+    return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } })
+}
 
 async function UsagePanel主页(TOKEN) {
     const html = `
