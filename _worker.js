@@ -804,13 +804,13 @@ async function UsagePanel管理面板(TOKEN) {
                     </div>
                     <div class="stats-grid">
                         <div class="mini-card">
-                            <div class="mini-icon">⚡️</div>
-                            <div class="mini-label">Workers 请求</div>
+                            <div class="mini-icon">🔶</div>
+                            <div class="mini-label">Workers</div>
                             <div class="mini-value">\${(data.workers || 0).toLocaleString()}</div>
                         </div>
                         <div class="mini-card">
-                            <div class="mini-icon">📄</div>
-                            <div class="mini-label">Pages 请求</div>
+                            <div class="mini-icon">⚡️</div>
+                            <div class="mini-label">Pages</div>
                             <div class="mini-value">\${(data.pages || 0).toLocaleString()}</div>
                         </div>
                     </div>
@@ -1571,13 +1571,13 @@ async function UsagePanel主页(TOKEN) {
 
                     <div class="stats-grid">
                         <div class="mini-card">
-                            <div class="mini-icon">⚡️</div>
-                            <div class="mini-label">Workers 请求</div>
+                            <div class="mini-icon">🔶</div>
+                            <div class="mini-label">Workers</div>
                             <div class="mini-value">\${(data.workers || 0).toLocaleString()}</div>
                         </div>
                         <div class="mini-card">
-                            <div class="mini-icon">📄</div>
-                            <div class="mini-label">Pages 请求</div>
+                            <div class="mini-icon">⚡️</div>
+                            <div class="mini-label">Pages</div>
                             <div class="mini-value">\${(data.pages || 0).toLocaleString()}</div>
                         </div>
                     </div>
