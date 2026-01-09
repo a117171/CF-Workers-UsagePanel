@@ -2,18 +2,19 @@
 
 export default {
     async fetch(request, env, ctx) {
+        const 面板管理员账号 = env.USER || env.user || env.USERNAME || env.username || 'admin';
         const 面板管理员密码 = env.ADMIN || env.admin || env.PASSWORD || env.password || env.pswd;
         if (!面板管理员密码) {
-            return new Response('请先在变量中设置面板管理员密码', { status: 500 });
+            return new Response('请先在变量中设置 PASSWORD 变量', { status: 500 });
         }
-        
+
         if (env.KV && typeof env.KV.get === 'function') {
             const url = new URL(request.url);
             const UA = request.headers.get('User-Agent') || 'null';
             const 访问路径 = url.pathname.slice(1).toLowerCase();
             const 区分大小写访问路径 = url.pathname.slice(1);
 
-            const 管理员TOKEN = await MD5MD5(面板管理员密码);
+            const 管理员TOKEN = await MD5MD5(面板管理员密码 + 面板管理员账号);
             const 临时TOKEN = await MD5MD5(url.hostname + 管理员TOKEN + UA);
             const 管理员COOKIE = await MD5MD5(管理员TOKEN + UA);
 
@@ -55,9 +56,10 @@ export default {
                 if (区分大小写访问路径 === 'api/login') { // 管理员登录接口
                     try {
                         const body = await request.json();
+                        const 输入账号 = body.username || '';
                         const 输入密码 = body.password || '';
-                        if (输入密码 === 面板管理员密码) {
-                            // 密码正确，设置Cookie
+                        if (输入账号 === 面板管理员账号 && 输入密码 === 面板管理员密码) {
+                            // 账号密码正确，设置Cookie
                             return new Response(JSON.stringify({ success: true, msg: '登录成功' }), {
                                 status: 200,
                                 headers: {
@@ -66,7 +68,7 @@ export default {
                                 }
                             });
                         } else {
-                            return new Response(JSON.stringify({ success: false, msg: '密码错误' }), {
+                            return new Response(JSON.stringify({ success: false, msg: '账号或密码错误' }), {
                                 status: 401,
                                 headers: { 'Content-Type': 'application/json;charset=UTF-8' }
                             });
@@ -145,9 +147,44 @@ export default {
                         return new Response(JSON.stringify({ success: false, msg: '保存配置失败: ' + error.message }), { status: 500, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                     }
                     
-                } else if (区分大小写访问路径 === 'api/del') {// 删除CF账号（开发中）
+                } else if (区分大小写访问路径 === 'api/del') {// 删除CF账号
+                    try {
+                        const body = await request.json();
+                        const deleteId = body.ID;
+                        
+                        // 验证 ID 参数
+                        if (deleteId === undefined || deleteId === null) {
+                            return new Response(JSON.stringify({ success: false, msg: '请提供要删除的账号ID' }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+                        }
+                        
+                        // 读取现有配置
+                        let usage_config_json = await env.KV.get('usage_config.json', { type: 'json' });
+                        if (!Array.isArray(usage_config_json) || usage_config_json.length === 0) {
+                            return new Response(JSON.stringify({ success: false, msg: '配置列表为空，无法删除' }), { status: 404, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+                        }
+                        
+                        // 查找要删除的账号
+                        const targetIndex = usage_config_json.findIndex(item => item.ID === deleteId);
+                        if (targetIndex === -1) {
+                            return new Response(JSON.stringify({ success: false, msg: `未找到ID为 ${deleteId} 的账号` }), { status: 404, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+                        }
+                        
+                        // 获取被删除账号的名称用于返回信息
+                        const deletedName = usage_config_json[targetIndex].Name || '未命名账号';
+                        
+                        // 删除该账号
+                        usage_config_json.splice(targetIndex, 1);
+                        
+                        // 保存回 KV
+                        await env.KV.put('usage_config.json', JSON.stringify(usage_config_json));
+                        
+                        return new Response(JSON.stringify({ success: true, msg: `账号 "${deletedName}" 已删除`, data: { ID: deleteId, Name: deletedName } }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+                    } catch (error) {
+                        console.error('删除账号失败:', error);
+                        return new Response(JSON.stringify({ success: false, msg: '删除账号失败: ' + error.message }), { status: 500, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+                    }
 
-                } else if (区分大小写访问路径 === 'api/check') {
+                } else if (区分大小写访问路径 === 'api/check') {// 检查单个CF账号请求量接口
                     try {
                         const Usage_JSON = await getCloudflareUsage(url.searchParams.get('Email'), url.searchParams.get('GlobalAPIKey'), url.searchParams.get('AccountID'), url.searchParams.get('APIToken'));
                         return new Response(JSON.stringify(Usage_JSON, null, 2), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -317,6 +354,7 @@ async function UsagePanel主页(TOKEN) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloudflare Workers/Pages 请求数使用统计</title>
+    <link rel="icon" href="https://cf-assets.www.cloudflare.com/dzlvafdwdttg/5uhbWfhjepEoUiM9phzhgJ/9658369030266cde9e35a3c5d4e4beb2/cloud-upload.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -797,6 +835,7 @@ async function UsagePanel主页(TOKEN) {
                 <button class="close-modal" onclick="closeLoginModal()">&times;</button>
                 <h2>🔐 管理员登录</h2>
                 <div class="login-error" id="loginError"></div>
+                <input type="text" class="login-input" id="adminUsername" placeholder="请输入管理员账号" onkeydown="if(event.key==='Enter')document.getElementById('adminPassword').focus()">
                 <input type="password" class="login-input" id="adminPassword" placeholder="请输入管理员密码" onkeydown="if(event.key==='Enter')handleLogin()">
                 <button class="login-btn" id="loginBtn" onclick="handleLogin()">登 录</button>
             </div>
@@ -806,7 +845,7 @@ async function UsagePanel主页(TOKEN) {
     <div class="container">
         <div class="glass-card">
             <header>
-                <h1>CF Workers/Pages 请求数统计</h1>
+                <h1>☁️ Workers/Pages 请求数统计</h1>
                 <div class="status-badge">
                     <div class="status-dot"></div>
                     <span>System Online</span>
@@ -821,7 +860,7 @@ async function UsagePanel主页(TOKEN) {
             </div>
 
             <div class="footer">
-                由 CF-Workers-UsagePanel 强力驱动
+                由 <a href="https://github.com/cmliu/CF-Workers-UsagePanel" target="_blank" rel="noopener" class="footer">CF-Workers-UsagePanel</a> 强力驱动
             </div>
         </div>
     </div>
@@ -896,11 +935,12 @@ async function UsagePanel主页(TOKEN) {
         // 管理员登录相关函数
         function openLoginModal() {
             document.getElementById('loginModal').classList.add('active');
-            document.getElementById('adminPassword').focus();
+            document.getElementById('adminUsername').focus();
         }
 
         function closeLoginModal() {
             document.getElementById('loginModal').classList.remove('active');
+            document.getElementById('adminUsername').value = '';
             document.getElementById('adminPassword').value = '';
             document.getElementById('loginError').classList.remove('show');
         }
@@ -920,13 +960,22 @@ async function UsagePanel主页(TOKEN) {
         });
 
         async function handleLogin() {
+            const username = document.getElementById('adminUsername').value;
             const password = document.getElementById('adminPassword').value;
             const loginBtn = document.getElementById('loginBtn');
             const errorDiv = document.getElementById('loginError');
 
+            if (!username) {
+                errorDiv.textContent = '请输入账号';
+                errorDiv.classList.add('show');
+                document.getElementById('adminUsername').focus();
+                return;
+            }
+
             if (!password) {
                 errorDiv.textContent = '请输入密码';
                 errorDiv.classList.add('show');
+                document.getElementById('adminPassword').focus();
                 return;
             }
 
@@ -938,7 +987,7 @@ async function UsagePanel主页(TOKEN) {
                 const response = await fetch('./api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password })
+                    body: JSON.stringify({ username, password })
                 });
 
                 const data = await response.json();
@@ -949,7 +998,7 @@ async function UsagePanel主页(TOKEN) {
                 } else {
                     errorDiv.textContent = data.msg || '登录失败';
                     errorDiv.classList.add('show');
-                    document.getElementById('adminPassword').select();
+                    document.getElementById('adminUsername').select();
                 }
             } catch (err) {
                 errorDiv.textContent = '网络错误，请重试';
