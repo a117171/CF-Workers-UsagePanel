@@ -41,7 +41,12 @@ export default {
                 if (验证管理员Cookie()) {
                     if (区分大小写访问路径 === 'admin/config.json') {
                         const usage_config_json = await env.KV.get('usage_config.json', { type: 'json' }) || [];
-                        return new Response(JSON.stringify(usage_config_json, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=UTF-8' } });
+                        const masked_config_json = usage_config_json.map(item => ({
+                            ...item,
+                            GlobalAPIKey: item.GlobalAPIKey ? 掩码敏感信息(item.GlobalAPIKey) : null,
+                            APIToken: item.APIToken ? 掩码敏感信息(item.APIToken) : null
+                        }));
+                        return new Response(JSON.stringify(masked_config_json, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=UTF-8' } });
                     } else if (区分大小写访问路径 === 'admin/usage.json') {
                         const usage_json = await 更新请求数(env);
                         return new Response(JSON.stringify(usage_json, null, 2), { headers: { 'Content-Type': 'application/json;charset=UTF-8' } });
@@ -349,6 +354,17 @@ async function getCloudflareUsage(Email, GlobalAPIKey, AccountID, APIToken) {
         console.error('获取使用量错误:', error.message);
         return { success: false, pages: 0, workers: 0, total: 0, max: 100000 };
     }
+}
+
+function 掩码敏感信息(文本, 前缀长度 = 3, 后缀长度 = 2) {
+    if (!文本 || typeof 文本 !== 'string') return 文本;
+    if (文本.length <= 前缀长度 + 后缀长度) return 文本; // 如果长度太短，直接返回
+
+    const 前缀 = 文本.slice(0, 前缀长度);
+    const 后缀 = 文本.slice(-后缀长度);
+    const 星号数量 = 文本.length - 前缀长度 - 后缀长度;
+
+    return `${前缀}${'*'.repeat(星号数量)}${后缀}`;
 }
 
 ////////////////////////////////HTML页面//////////////////////////////////
