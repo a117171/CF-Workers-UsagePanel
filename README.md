@@ -152,6 +152,10 @@
 |--------|------|---------|--------|------|
 | `PASSWORD` | String | ✅ **必须** | 无 | 管理员密码,用于登录管理面板。**强烈建议使用强密码** |
 | `USERNAME` | String | ⚪ 可选 | `admin` | 管理员账号名 |
+| `ACCOUNT_CHECK_INTERVAL_MINUTES` | Number | ⚪ 可选 | `20` | 单账号最短刷新间隔，按 `UpdateTime` 判断；未超过时使用历史数据 |
+| `MAX_EXTERNAL_SUBREQUESTS_PER_RUN` | Number | ⚪ 可选 | `50` | 每次汇总最多使用的外部子请求预算，最大不会超过 50 |
+
+每个账号刷新约消耗 4 个外部子请求；如果账号没有保存 `AccountID`，需要额外查询账户列表，约消耗 5 个外部子请求。默认 50 的预算通常可刷新 10-12 个账号。
 
 
 **⚠️ 重要提示:**
@@ -231,6 +235,7 @@
     "AccountID": "6d7***************************90",
     "APIToken": "duN***********************************fs",
     "UpdateTime": 1736455698819,
+    "LastCheckTime": 1736455698819,
     "Usage": {
       "success": true,
       "pages": 10900,
@@ -326,7 +331,7 @@ curl https://your-worker.workers.dev/usage.json?token=ADMIN_TOKEN
 | `/api/login` | POST | 管理员登录接口 | 无 |
 | `/api/add` | POST | 添加 CF 账号 | Cookie 认证 |
 | `/api/del` | POST | 删除 CF 账号 | Cookie 认证 |
-| `/api/check` | POST | 检查单个账号免费额度用量 | Cookie 认证 |
+| `/api/check` | POST | 管理员手动用 `AccountID/APIToken` 或 `Email/GlobalAPIKey` 查询免费额度用量 | Cookie 认证 |
 | `/admin/config.json` | GET | 获取账号配置列表 | Cookie 认证 |
 | `/admin/usage.json` | GET | 获取最新汇总使用数据 | Cookie 认证 |
 | `/usage.json` | GET | 公开的使用数据接口 | Token 参数 |
